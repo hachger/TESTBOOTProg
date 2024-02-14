@@ -46,7 +46,7 @@ MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 20K
 /*  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 64K */
-  FLASH    (rx)    : ORIGIN = 0x8005000,   LENGTH = 44K
+  FLASH    (rx)    : ORIGIN = 0x8004400,   LENGTH = 64K - 17K
 }
 
 /* Sections */
