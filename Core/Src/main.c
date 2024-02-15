@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usbd_cdc_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,18 +43,67 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+uint32_t currentheartbeat, timeOnOff;
+uint32_t heartbeat = 0xFAD55000;
+uint32_t maskHeartbeat = 0x80000000;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
-
+uint8_t LEDON(char *timeOn);
+uint8_t LEDOFF(char *timeOff);
+uint8_t LEDBLINK(char *blinkPatron);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t LEDON(char *timeOn){
+	unsigned int value;
+	char c;
+
+	if(sscanf(timeOn, "%u%c", &value, &c) != 2)
+		return 0;
+	if(c != '\r')
+		return 0;
+
+	currentheartbeat = 0xFFFFFFFF;
+	timeOnOff = value;
+
+	return 1;
+}
+
+uint8_t LEDOFF(char *timeOff){
+	unsigned int value;
+	char c;
+
+	if(sscanf(timeOff, "%u%c", &value, &c) != 2)
+		return 0;
+	if(c != '\r')
+		return 0;
+
+	currentheartbeat = 0x00000000;
+	timeOnOff = value;
+
+	return 1;
+}
+
+uint8_t LEDBLINK(char *blinkPatron){
+	unsigned int value;
+	char c;
+
+	if(sscanf(blinkPatron, "%u%c", &value, &c) != 2)
+		return 0;
+	if(c != '\r')
+		return 0;
+
+	currentheartbeat = value;
+	heartbeat = value;
+
+	return 1;
+
+}
 
 /* USER CODE END 0 */
 
@@ -65,8 +114,7 @@ static void MX_GPIO_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	uint32_t heartbeat = 0xFAD55000;
-	uint32_t maskHeartbeat = 0x80000000;
+
 
   /* USER CODE END 1 */
 
@@ -90,6 +138,11 @@ int main(void)
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
+
+  CDC_CMD_Activate();
+  CDC_CMD_Add("LEDON", LEDON);
+  CDC_CMD_Add("LEDOFF", LEDOFF);
+  CDC_CMD_Add("LEDBLINK", LEDBLINK);
 
   /* USER CODE END 2 */
 

@@ -32,6 +32,7 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
+
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -49,7 +50,13 @@
   */
 
 /* USER CODE BEGIN PRIVATE_TYPES */
+typedef struct cmd{
+	char name[9];
+	uint8_t (*ptrFun)(char *parameter);
+	struct cmd *nextCmd;
+} _sCmd;
 
+typedef void (*ReceiveFun)(uint8_t *, uint32_t);
 /* USER CODE END PRIVATE_TYPES */
 
 /**
@@ -62,7 +69,7 @@
   */
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
-typedef void (*ReceiveFun)(uint8_t *, uint32_t);
+#define SIZESTRFUNPARAM		32
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -96,7 +103,13 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 static ReceiveFun aReceiveFun = NULL;
+static _sCmd *cmds = NULL;
+static _sCmd *aux;
+static uint8_t bufAux[256];
+static char strFunParam[SIZESTRFUNPARAM] = {0};
+
 uint8_t lineCodingBuf[7];
+
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -129,7 +142,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
 static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
-
+static uint8_t CMDHelp(char *parameter);
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -277,6 +290,57 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 	if(aReceiveFun != NULL)
 		aReceiveFun(Buf, *Len);
 
+	if(cmds != NULL){
+		uint8_t i = 0;
+		uint8_t param = 0;
+
+		for(uint32_t j=0; j<*Len; j++){
+			strFunParam[i] = Buf[j];
+			if(param){
+				if(strFunParam[i] == '\r'){
+					if(aux->ptrFun(strFunParam)){
+						strcpy((char *)bufAux, "\nOK\n");
+						CDC_Transmit_FS(bufAux, 4);
+					}
+					else{
+						strcpy((char *)bufAux, "\nERROR\n");
+						CDC_Transmit_FS(bufAux, 7);
+					}
+					i = 255;
+				}
+			}
+			else{
+				if(strFunParam[i]==' ' || strFunParam[i]=='\r'){
+					strFunParam[i] = '\0';
+					aux = cmds;
+					while(aux){
+						if(strncmp(aux->name, strFunParam, 9) == 0)
+							break;
+						aux = aux->nextCmd;
+					}
+					i = 255;
+					param = 0;
+					if(aux == NULL)
+						CMDHelp(NULL);
+					else{
+						if(Buf[j] == ' ')
+							param = 1;
+						else{
+							aux->ptrFun(NULL);
+							strcpy((char *)bufAux, "\nOK\n");
+							CDC_Transmit_FS(bufAux, 4);
+						}
+					}
+				}
+			}
+			i++;
+			if(i == SIZESTRFUNPARAM){
+				i = 0;
+				param = 0;
+			}
+		}
+	}
+
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
@@ -311,6 +375,78 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
 void CDC_Attach_Receive_FS(void (*pFun)(uint8_t* Buf, uint32_t Len)){
 	aReceiveFun = pFun;
+}
+
+uint8_t CDC_CMD_Activate(){
+	if(cmds != NULL)
+		return 1;
+
+	aux = (_sCmd *)malloc(sizeof(_sCmd));
+
+	if(aux == NULL)
+		return 0;
+
+	strcpy(aux->name, "?");
+	aux->ptrFun = CMDHelp;
+	aux->nextCmd = NULL;
+
+	cmds = aux;
+
+	return 1;
+}
+
+void CDC_CMD_Deactivate(){
+	while(cmds){
+		aux = cmds->nextCmd;
+		free(cmds);
+		cmds = aux;
+	}
+
+	cmds = NULL;
+}
+
+uint8_t CDC_CMD_State(){
+	if(cmds == NULL)
+		return 0;
+	return 1;
+}
+
+uint8_t CDC_CMD_Add(const char *cmdName, uint8_t (*ptrCMDFun)(char *parameter)){
+	aux = (_sCmd *)malloc(sizeof(_sCmd));
+
+	if(aux == NULL)
+		return 0;
+
+	strncpy(aux->name, cmdName, 8);
+	aux->name[8] = '\0';
+	aux->ptrFun = ptrCMDFun;
+	aux->nextCmd = cmds;
+
+	cmds = aux;
+
+	return 1;
+}
+
+static uint8_t CMDHelp(char *parameter){
+	UNUSED(parameter);
+
+	uint8_t i = 0;
+	uint8_t j;
+
+	aux = cmds;
+	while(aux){
+		j = 0;
+		while(aux->name[j]){
+			bufAux[i++] = aux->name[j];
+			j++;
+		}
+		bufAux[i++] = '\n';
+		aux = aux->nextCmd;
+	}
+
+	CDC_Transmit_FS(bufAux, i);
+
+	return 1;
 }
 
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
