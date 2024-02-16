@@ -112,7 +112,7 @@ void CDC_Attach_Receive_FS(void (*pFun)(uint8_t* Buf, uint32_t Len));
 uint8_t CDC_CMD_Activate();
 void CDC_CMD_Deactivate();
 uint8_t CDC_CMD_State();
-uint8_t CDC_CMD_Add(const char *cmdName, uint8_t (*ptrCMDFun)(char *parameter));
+uint8_t CDC_CMD_Add(const char *cmdName, const char *cmdHelp, uint8_t (*ptrCMDFun)(char *parameter));
 
 /* USER CODE END EXPORTED_FUNCTIONS */
 

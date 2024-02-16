@@ -52,6 +52,7 @@
 /* USER CODE BEGIN PRIVATE_TYPES */
 typedef struct cmd{
 	char name[9];
+	char helpStr[17];
 	uint8_t (*ptrFun)(char *parameter);
 	struct cmd *nextCmd;
 } _sCmd;
@@ -69,7 +70,7 @@ typedef void (*ReceiveFun)(uint8_t *, uint32_t);
   */
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
-#define SIZESTRFUNPARAM		32
+#define SIZESTRFUNPARAM			32
 /* USER CODE END PRIVATE_DEFINES */
 
 /**
@@ -296,18 +297,9 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 
 		for(uint32_t j=0; j<*Len; j++){
 			strFunParam[i] = Buf[j];
-			if(param){
-				if(strFunParam[i] == '\r'){
-					if(aux->ptrFun(strFunParam)){
-						strcpy((char *)bufAux, "\nOK\n");
-						CDC_Transmit_FS(bufAux, 4);
-					}
-					else{
-						strcpy((char *)bufAux, "\nERROR\n");
-						CDC_Transmit_FS(bufAux, 7);
-					}
-					i = 255;
-				}
+			if(param == 1){
+				if(strFunParam[i] == '\r')
+					param = 2;
 			}
 			else{
 				if(strFunParam[i]==' ' || strFunParam[i]=='\r'){
@@ -325,14 +317,23 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 					else{
 						if(Buf[j] == ' ')
 							param = 1;
-						else{
-							aux->ptrFun(NULL);
-							strcpy((char *)bufAux, "\nOK\n");
-							CDC_Transmit_FS(bufAux, 4);
-						}
+						else
+							param = 2;
 					}
 				}
 			}
+			if(param == 2){
+				if(aux->ptrFun(strFunParam)){
+					strcpy((char *)bufAux, "\r\nOK\r\n");
+					CDC_Transmit_FS(bufAux, 6);
+				}
+				else{
+					strcpy((char *)bufAux, "\r\nERROR\r\n");
+					CDC_Transmit_FS(bufAux, 9);
+				}
+				i = 255;
+			}
+
 			i++;
 			if(i == SIZESTRFUNPARAM){
 				i = 0;
@@ -387,6 +388,7 @@ uint8_t CDC_CMD_Activate(){
 		return 0;
 
 	strcpy(aux->name, "?");
+	strcpy(aux->helpStr, "HELP");
 	aux->ptrFun = CMDHelp;
 	aux->nextCmd = NULL;
 
@@ -411,7 +413,7 @@ uint8_t CDC_CMD_State(){
 	return 1;
 }
 
-uint8_t CDC_CMD_Add(const char *cmdName, uint8_t (*ptrCMDFun)(char *parameter)){
+uint8_t CDC_CMD_Add(const char *cmdName, const char *cmdHelp, uint8_t (*ptrCMDFun)(char *parameter)){
 	aux = (_sCmd *)malloc(sizeof(_sCmd));
 
 	if(aux == NULL)
@@ -419,6 +421,9 @@ uint8_t CDC_CMD_Add(const char *cmdName, uint8_t (*ptrCMDFun)(char *parameter)){
 
 	strncpy(aux->name, cmdName, 8);
 	aux->name[8] = '\0';
+	strncpy(aux->helpStr, cmdHelp, 16);
+	aux->helpStr[16] = '\0';
+
 	aux->ptrFun = ptrCMDFun;
 	aux->nextCmd = cmds;
 
@@ -440,6 +445,13 @@ static uint8_t CMDHelp(char *parameter){
 			bufAux[i++] = aux->name[j];
 			j++;
 		}
+		bufAux[i++] = ' ';
+		j = 0;
+		while(aux->helpStr[j]){
+			bufAux[i++] = aux->helpStr[j];
+			j++;
+		}
+		bufAux[i++] = '\r';
 		bufAux[i++] = '\n';
 		aux = aux->nextCmd;
 	}

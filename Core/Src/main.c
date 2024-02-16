@@ -69,7 +69,7 @@ uint8_t LEDON(char *timeOn){
 		return 0;
 
 	currentheartbeat = 0xFFFFFFFF;
-	timeOnOff = value;
+	timeOnOff = value/100;
 
 	return 1;
 }
@@ -84,7 +84,7 @@ uint8_t LEDOFF(char *timeOff){
 		return 0;
 
 	currentheartbeat = 0x00000000;
-	timeOnOff = value;
+	timeOnOff = value/100;
 
 	return 1;
 }
@@ -93,10 +93,18 @@ uint8_t LEDBLINK(char *blinkPatron){
 	unsigned int value;
 	char c;
 
-	if(sscanf(blinkPatron, "%u%c", &value, &c) != 2)
-		return 0;
-	if(c != '\r')
-		return 0;
+	if(blinkPatron[0]=='0' && (blinkPatron[1]=='x' || blinkPatron[1]=='X')){
+		if(sscanf(blinkPatron, "%x%c", &value, &c) != 2)
+			return 0;
+		if(c != '\r')
+			return 0;
+	}
+	else{
+		if(sscanf(blinkPatron, "%u%c", &value, &c) != 2)
+			return 0;
+		if(c != '\r')
+			return 0;
+	}
 
 	currentheartbeat = value;
 	heartbeat = value;
@@ -140,9 +148,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   CDC_CMD_Activate();
-  CDC_CMD_Add("LEDON", LEDON);
-  CDC_CMD_Add("LEDOFF", LEDOFF);
-  CDC_CMD_Add("LEDBLINK", LEDBLINK);
+  CDC_CMD_Add("LEDON", "t*100",LEDON);
+  CDC_CMD_Add("LEDOFF", "t*100", LEDOFF);
+  CDC_CMD_Add("LEDBLINK", "patron", LEDBLINK);
+
+  currentheartbeat = heartbeat;
+  timeOnOff = 0;
 
   /* USER CODE END 2 */
 
@@ -153,7 +164,13 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if(maskHeartbeat & heartbeat)
+	  if(timeOnOff){
+		  timeOnOff--;
+		  if(!timeOnOff)
+			  currentheartbeat = heartbeat;
+	  }
+
+	  if(maskHeartbeat & currentheartbeat)
 		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 	  else
 		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
